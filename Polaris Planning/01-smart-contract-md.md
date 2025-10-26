@@ -1,7 +1,7 @@
 # Smart Contract - Polaris Music Registry
 
 ## Overview
-This smart contract handles on-chain anchoring of music data events, voting with Fractally Respect weights, and stake management. Groups are first-class entities representing bands and ensembles.
+This smart contract handles on-chain anchoring of music data events, voting with Fractally Respect weights, and stake management.
 
 ## Contract Implementation
 
@@ -30,14 +30,14 @@ public:
      * @param author - The blockchain account submitting the event
      * @param type - Event type enum:
      *   21 = CREATE_RELEASE_BUNDLE (full release with groups, tracks, etc.)
-     *   22 = CREATE_GROUP (standalone group/band creation)
-     *   23 = ADD_MEMBER (add person to existing group)
-     *   24 = REMOVE_MEMBER (mark member as departed from group)
+     * REMOVED   22 = CREATE_GROUP (standalone group/band creation)
+     * REMOVED   23 = ADD_MEMBER (add person to existing group)
+     * REMOVED   24 = REMOVE_MEMBER (mark member as departed from group)
      *   30 = ADD_CLAIM (add data to existing entity)
      *   31 = EDIT_CLAIM (modify existing data)
      *   40 = VOTE (vote on a submission)
      *   41 = LIKE (like a node in the graph)
-     *   42 = DISCUSS (comment on an entity)
+     *   42 = DISCUSS (comment on an entity or claim)
      *   50 = FINALIZE (finalize voting and distribute rewards)
      *   60 = MERGE_NODE (deduplicate entities)
      * @param hash - SHA256 hash of the canonical off-chain event body
@@ -92,14 +92,14 @@ public:
         
         // Log event for off-chain indexers
         emit_anchor_event(author, type, hash, anchor_id, g.x);
-    }
-    
+    }  
     /**
-     * Attest to the validity of an anchored event
-     * Used by trusted attestors to verify high-value submissions
-     * 
-     * @param attestor - Account doing the attestation (must be authorized)
-     * @param tx_hash - Hash of the event being attested
+     * Attest to the validity of a user account
+     * Used after daily stand-up meetings to verify the validity of user accounts.
+     * Verifying the validity of the user accounts allows the users to claim their tokens.
+     * Until they verify their account, the tokens they've earned are staked to a random group. 
+     * @param attestor - Account doing the attestation (must be authorized account)
+     * @param attested_user - name of the user being attested
      * @param type - The event type being attested (must match anchor)
      */
     ACTION attest(name attestor, checksum256 tx_hash, uint8_t type) {
@@ -108,20 +108,15 @@ public:
         // Verify attestor is authorized
         check(is_authorized_attestor(attestor), "Not an authorized attestor");
         
-        // Verify the anchor exists and matches type
-        anchors_table anchors(get_self(), get_self().value);
-        auto idx = anchors.get_index<"byhash"_n>();
-        auto itr = idx.find(tx_hash);
-        check(itr != idx.end(), "Anchor not found");
-        check(itr->type == type, "Type mismatch");
+        // Verify the user exists and has pending tokens
+        // [TO BE IMPLEMENTED]
         
         // Store attestation
         attestations_table attestations(get_self(), get_self().value);
         attestations.emplace(attestor, [&](auto& a) {
             a.id = attestations.available_primary_key();
-            a.tx_hash = tx_hash;
+            a.attested_user = attested_user;
             a.attestor = attestor;
-            a.type = type;
             a.ts = current_time_point();
         });
     }
@@ -244,14 +239,6 @@ public:
         check(!itr->finalized, "Already finalized");
         check(current_time_point().sec_since_epoch() >= itr->expires_at,
               "Voting window still open");
-        
-        // Check attestation requirement for high-value submissions
-        if(requires_attestation(itr->type)) {
-            attestations_table attestations(get_self(), get_self().value);
-            auto att_idx = attestations.get_index<"byhash"_n>();
-            auto att_itr = att_idx.find(tx_hash);
-            check(att_itr != att_idx.end(), "Attestation required but not found");
-        }
         
         // Calculate weighted vote totals
         auto [up_votes, down_votes] = calculate_weighted_votes(tx_hash);
@@ -468,9 +455,8 @@ private:
     // Attestation records
     TABLE attestation {
         uint64_t    id;
-        checksum256 tx_hash;        // Event attested
-        name        attestor;       // Who attested
-        uint8_t     type;          // Event type confirmed
+        name        attested_user;   // User that was attested for
+        name        attestor;       // The person who made the attestation
         time_point  ts;            // When attested
         
         uint64_t primary_key() const { return id; }
@@ -514,7 +500,7 @@ private:
      * Get voting window duration based on event type
      */
     uint32_t get_vote_window(uint8_t type) {
-        if(type == 21 || type == 22) return 7 * 24 * 60 * 60; // 7 days for releases/groups
+        if(type == 21 || type == 22) return 7 * 24 * 60 * 60; // 7 days for releases
         if(type == 30 || type == 31) return 3 * 24 * 60 * 60; // 3 days for claims
         return 24 * 60 * 60; // 1 day default
     }
@@ -525,8 +511,6 @@ private:
     uint64_t get_multiplier(uint8_t type) {
         switch(type) {
             case 21: return 1000000;  // CREATE_RELEASE_BUNDLE
-            case 22: return 500000;   // CREATE_GROUP
-            case 23: return 100000;   // ADD_MEMBER
             case 30: return 50000;    // ADD_CLAIM
             case 31: return 1000;     // EDIT_CLAIM
             default: return 0;        // No emission
@@ -534,11 +518,6 @@ private:
     }
     
     /**
-     * Check if event type requires attestation
-     */
-    bool requires_attestation(uint8_t type) {
-        return type == 21 || type == 22; // Releases and groups
-    }
     
     /**
      * Create composite key for indexes
@@ -561,7 +540,7 @@ private:
      */
     bool is_authorized_attestor(name account) {
         // In production, check against a table or multisig
-        return account == name("council.pol") || account == get_fractally_oracle();
+        return account == name("polaris") || account == get_fractally_oracle();
     }
     
     /**
