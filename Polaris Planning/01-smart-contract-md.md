@@ -471,6 +471,7 @@ private:
         double      carry;          // Fractional emission accumulator
         uint64_t    round;          // Current round
         name        fractally_oracle; // Who can update Respect
+        uint64_t    featured        // Which node has been randomly selected to be the starting node for the visualization    
         
         EOSLIB_SERIALIZE(global_state, (x)(carry)(round)(fractally_oracle))
     };
@@ -606,7 +607,12 @@ private:
                           uint64_t id, uint64_t x) {
         // Emit event for indexers
     }
-    
+
+    void calculate_featured(checksum256 last_block_header, checksum256 BTC_block_header,
+                          uint64_t timestamp, uint64_t x) {
+        // Use node_aggregate table to randomly select a node weighted by its stake, using available entropy to salt the data. Implementation omitted but could hash the product of the block headers, timestamp, and global submission counter, then associate each node with a range of hash results proportional to their share of total stake based on the node_aggregate table. 
+    }
+
     std::string to_hex(const checksum256& hash) {
         // Convert hash to hex string for display
         return ""; // Implementation omitted
