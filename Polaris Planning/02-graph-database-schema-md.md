@@ -1,7 +1,7 @@
 # Graph Database Schema - Neo4j Implementation
 
 ## Overview
-Complete Neo4j graph database schema for the music registry. Groups are first-class entities, with clear distinction between group members (MEMBER_OF) and guest performers (GUEST_ON).
+Complete Neo4j graph database schema for the music registry. Groups have clear distinctions between group members (MEMBER_OF) and guest performers (GUEST_ON).
 
 ## Schema Implementation
 
@@ -186,8 +186,8 @@ class MusicGraphDatabase {
                     SET g.name = $name,
                         g.alt_names = $altNames,
                         g.bio = $bio,
-                        g.formed_date = $formed,
-                        g.disbanded_date = $disbanded,
+                            // g.formed_date = $formed,
+                            // g.disbanded_date = $disbanded,
                         g.updated_by = $eventHash,
                         g.updated_at = datetime()
                     
@@ -214,8 +214,8 @@ class MusicGraphDatabase {
                     name: group.name,
                     altNames: group.alt_names || [],
                     bio: group.bio,
-                    formed: group.formed_date,
-                    disbanded: group.disbanded_date,
+                    // formed: group.formed_date,
+                    // disbanded: group.disbanded_date,
                     eventHash,
                     account: submitterAccount,
                     cityId: group.origin_city?.id,
@@ -927,13 +927,16 @@ export default MusicGraphDatabase;
 | Group | Band/ensemble/orchestra | group_id, name, formed_date, member_count |
 | Song | Musical composition | song_id, title, iswc, writers |
 | Track | Recording of a song | track_id, title, isrc, duration |
-| Release | Album/EP/Single | release_id, name, release_date, format |
+| Release | Album/EP/Single/LivePerformance | release_id, name, release_date, format |
 | Master | Canonical album grouping | master_id, name |
 | Label | Record label | label_id, name |
 | Account | Blockchain account | account_id |
 | City | Geographic location | city_id, name, lat, lon |
 | Claim | Audit trail | claim_id, node_id, field, value |
 | Source | External reference | source_id, url |
+<!-- Media should link to a URL and then fetches the media from the URL to produce an IPFS address for the media -->
+| Media | Associated Media | url, media_id |
+
 
 ## Relationship Types Summary
 
@@ -949,8 +952,9 @@ export default MusicGraphDatabase;
 | IN_RELEASE | Track → Release | Track appears on release |
 | IN_MASTER | Release → Master | Release variant of master |
 | UNDER | Release → Label | Released by label |
-| ORIGIN | Person/Group → City | Geographic origin |
+| ORIGIN | Person|Group|Release|Label → City | Geographic origin |
 | SUBMITTED | Account → Any | Who submitted data |
+| REPRESENTS | Media → Any | What is represented in the linked media |
 
 ## Testing Queries
 
